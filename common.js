@@ -33,7 +33,7 @@
 
   const DEFAULT_SETTINGS = {
     announcement: 'شحن سريع لجميع المحافظات · الدفع عند الاستلام · اطلب أي مانجا متاح بالطلب',
-    whatsapp: '01558647645', site: 'mangahub.eg', shipFee: 60, freeOver: 1000,
+    whatsapp: '01558647645', site: 'mangahub.eg', carrier: 'بارسيل', shipFee: 60, freeOver: 1000,
     heroTitle: 'وجهتك لعالم المانجا',
     heroSub: 'مجلدات أصلية بالعربية والإنجليزية والفرنسية، وأي عنوان مش موجود عندنا نجيبهولك بالطلب.'
   };
@@ -42,7 +42,7 @@
     if (!r) return d;
     return {
       announcement: r.announcement == null ? d.announcement : r.announcement,
-      whatsapp: r.whatsapp || d.whatsapp, site: r.site || d.site,
+      whatsapp: r.whatsapp || d.whatsapp, site: r.site || d.site, carrier: r.carrier || d.carrier,
       shipFee: r.ship_fee == null ? d.shipFee : Number(r.ship_fee),
       freeOver: r.free_over == null ? d.freeOver : Number(r.free_over),
       heroTitle: r.hero_title || d.heroTitle, heroSub: r.hero_sub == null ? d.heroSub : r.hero_sub

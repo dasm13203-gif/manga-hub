@@ -4,7 +4,7 @@
   const { sb, $, esc, fmt, EGP, ls, IC, LANGS, GOVS, mapSettings, mapProduct, coverStyle, coverInner, toast, okPhone, waLink, copyText } = MH;
   const app = $('#app'), ov = $('#overlay');
   const LOGO = 'logo.jpg';
-  let S = mapSettings(null), P = [];
+  let S = mapSettings(null), P = [], R = {};
   const F = { q: '', lang: 'all', genre: 'all', sort: 'feat' };
   let cart = ls.get('mh-cart', {});
   let co = ls.get('mh-co', { name: '', phone: '', gov: '', addr: '', note: '' });
@@ -18,10 +18,12 @@
     const L = Object.keys(cart).map(id => ({ p: prod(id), q: cart[id] })).filter(l => l.p && l.q > 0)
       .map(l => ({ p: l.p, q: Math.min(l.q, maxQty(l.p)) })).filter(l => l.q > 0);
     const sub = L.reduce((a, l) => a + l.q * l.p.price, 0);
-    const fee = Number(S.shipFee) || 0, fo = Number(S.freeOver) || 0;
+    const fo = Number(S.freeOver) || 0;
     const free = fo > 0 && sub >= fo;
-    const ship = sub === 0 ? 0 : (free ? 0 : fee);
-    return { L, sub, ship, free, total: sub + ship, count: L.reduce((a, l) => a + l.q, 0) };
+    const rate = co.gov ? R[co.gov] : null;
+    const base = rate ? Number(rate.fee) : (Number(S.shipFee) || 0);
+    const ship = sub === 0 ? 0 : (free ? 0 : (co.gov ? base : 0));
+    return { L, sub, ship, free, pending: sub > 0 && !free && !co.gov, total: sub + ship, count: L.reduce((a, l) => a + l.q, 0) };
   }
   function saveCart() {
     ls.set('mh-cart', cart);
@@ -54,7 +56,7 @@
       '<p class="lead">' + esc(S.heroSub || '') + '</p>' +
       '<div class="cta"><a class="btn primary" href="#catalog">تصفح المجلدات</a><a class="btn ghost" href="#request">اطلب أي مانجا</a></div>' +
       '</div><div class="emblem"><img src="' + LOGO + '" alt="شعار مانجا هب"></div></div></section>' +
-      '<div class="wrap"><ul class="trust">' + trust(IC.truck, 'شحن لجميع المحافظات') + trust(IC.shield, 'تغليف آمن') + trust(IC.badge, 'منتجات أصلية 100%') + trust(IC.bag, 'اطلب أي مانجا بالطلب') + '</ul></div>' +
+      '<div class="wrap"><ul class="trust">' + trust(IC.truck, 'شحن ' + S.carrier + ' لجميع المحافظات') + trust(IC.shield, 'تغليف آمن') + trust(IC.badge, 'منتجات أصلية 100%') + trust(IC.bag, 'اطلب أي مانجا بالطلب') + '</ul></div>' +
       '<section class="sec catalog" id="catalog"><div class="wrap">' +
       '<div class="sec-head"><h2>المجلدات</h2><span class="muted" id="rescount"></span></div>' +
       '<div class="toolbar"><input type="search" id="q" placeholder="ابحث باسم المانجا أو المؤلف" aria-label="بحث" value="' + esc(F.q) + '">' +
@@ -143,9 +145,9 @@
       '<ol class="stepgrid">' + st.map((x, i) => '<li><span class="sn num">' + (i + 1) + '</span><div><b>' + x[0] + '</b><p class="muted">' + x[1] + '</p></div></li>').join('') + '</ol></div></section>';
   }
   function faqHTML() {
-    const fee = Number(S.shipFee) || 0, fo = Number(S.freeOver) || 0;
+    const fo = Number(S.freeOver) || 0;
     const q = [
-      ['بتشحنوا لأنهي محافظات؟', 'بنشحن لجميع محافظات مصر. سعر الشحن ' + EGP(fee) + (fo > 0 ? ' والشحن مجاني للطلبات من ' + EGP(fo) + '.' : '.')],
+      ['بتشحنوا لأنهي محافظات؟', 'بنشحن لجميع محافظات مصر عن طريق ' + S.carrier + '. سعر الشحن بيختلف حسب المحافظة وبيظهر في السلة قبل ما تأكد الطلب' + (fo > 0 ? '، والشحن مجاني للطلبات من ' + EGP(fo) + '.' : '.')],
       ['الدفع إزاي؟', 'الدفع عند الاستلام.'],
       ['المنتجات أصلية؟', 'أيوه، كل منتجاتنا أصلية 100% جودة وبتتغلّف بحماية كاملة قبل الشحن.'],
       ['مش لاقي العنوان اللي بدور عليه؟', 'اطلبه من قسم «اطلب أي مانجا». بنرد عليك بالسعر وموعد التوفير قبل ما نبدأ.']
@@ -181,8 +183,13 @@
   }
 
   /* ---------- السلة ---------- */
+  function govList() {
+    if (Object.keys(R).length) return Object.values(R).filter(r => r.active).sort((a, b) => a.sort - b.sort);
+    return GOVS.map(g => ({ gov: g, fee: Number(S.shipFee) || 0, sort: 0 }));
+  }
   function renderDrawer() {
     if (!drawer) { ov.innerHTML = ''; return; }
+    if (co.gov && Object.keys(R).length && !(R[co.gov] && R[co.gov].active)) co.gov = '';
     const T = totals(); let body = '', foot = '';
     if (step === 'sent') {
       body = '<div class="sent"><div class="ok">' + IC.check + '</div><h3>تم تسجيل طلبك رقم ' + esc(sentText.id) + '</h3><p class="muted">الدفع عند الاستلام. ابعت تفاصيل الطلب على واتساب عشان نأكد معاك الشحن والمواعيد.</p>' +
@@ -197,13 +204,13 @@
         '<div class="panel" style="padding:.9rem">' +
         '<label class="f">الاسم<input id="c-name" data-co="name" value="' + esc(co.name) + '" autocomplete="name" maxlength="100"></label>' +
         '<label class="f">رقم الموبايل<input id="c-phone" data-co="phone" value="' + esc(co.phone) + '" inputmode="tel" dir="ltr" autocomplete="tel" placeholder="01xxxxxxxxx"></label>' +
-        '<label class="f">المحافظة<select id="c-gov" data-co="gov"><option value="">اختر المحافظة</option>' + GOVS.map(g => '<option' + (co.gov === g ? ' selected' : '') + '>' + g + '</option>').join('') + '</select></label>' +
+        '<label class="f">المحافظة<select id="c-gov" data-co="gov"><option value="">اختر المحافظة</option>' + govList().map(g => '<option value="' + esc(g.gov) + '"' + (co.gov === g.gov ? ' selected' : '') + '>' + esc(g.gov) + ' · ' + fmt(g.fee) + ' ج.م</option>').join('') + '</select></label>' +
         '<label class="f">العنوان بالتفصيل<textarea id="c-addr" data-co="addr" rows="2" maxlength="300">' + esc(co.addr) + '</textarea></label>' +
         '<label class="f">ملاحظات (اختياري)<input id="c-note" data-co="note" value="' + esc(co.note) + '" maxlength="300"></label></div>';
       foot = '<div class="sum"><span>المجموع الفرعي</span><span class="num">' + EGP(T.sub) + '</span></div>' +
-        '<div class="sum"><span>الشحن' + (T.free ? ' (مجاني)' : '') + '</span><span class="num">' + (T.free ? '0 ج.م' : EGP(T.ship)) + '</span></div>' +
+        '<div class="sum"><span>الشحن (' + esc(S.carrier) + ')' + (T.free ? ' · مجاني' : '') + '</span><span class="num">' + (T.free ? '0 ج.م' : (T.pending ? 'يتحدد بالمحافظة' : EGP(T.ship))) + '</span></div>' +
         (!T.free && Number(S.freeOver) > 0 ? '<div class="hint">الشحن مجاني للطلبات من ' + EGP(S.freeOver) + '</div>' : '') +
-        '<div class="sum tot"><span>الإجمالي (الدفع عند الاستلام)</span><span class="num">' + EGP(T.total) + '</span></div>' +
+        (T.pending ? '<div class="hint">اختار المحافظة عشان يتحسب سعر الشحن.</div>' : '') + '<div class="sum tot"><span>' + (T.pending ? 'الإجمالي بدون الشحن' : 'الإجمالي (الدفع عند الاستلام)') + '</span><span class="num">' + EGP(T.total) + '</span></div>' +
         (cerr ? '<div class="err">' + esc(cerr) + '</div>' : '') +
         '<button type="button" class="btn primary" data-act="checkout"' + (sending ? ' disabled' : '') + '>' + (sending ? 'جاري إرسال الطلب…' : 'تأكيد الطلب') + '</button>';
     }
@@ -233,13 +240,14 @@
     if (error) {
       const m = String(error.message || '');
       if (m.includes('out_of_stock')) { cerr = 'الكمية المتاحة من «' + m.split('out_of_stock:')[1].trim() + '» أقل من المطلوب. اتحدّث المخزون، راجع السلة.'; await loadProducts(); renderGrid(); }
+      else if (m.includes('gov_unavailable')) { cerr = 'الشحن غير متاح لهذه المحافظة حاليًا. كلمنا على واتساب.'; }
       else if (m.includes('unavailable')) { cerr = 'في كتاب في السلة بقى غير متاح. راجع السلة.'; await loadProducts(); renderGrid(); }
       else cerr = 'تعذر إرسال الطلب. جرّب تاني أو كلمنا على واتساب';
       return renderDrawer();
     }
     const items = data.items.map(i => '- ' + i.title + ' × ' + i.qty + ' = ' + fmt(i.qty * i.price) + ' ج.م' + (i.preorder ? ' (بالطلب)' : '')).join('\n');
     const msg = 'طلب جديد من مانجا هب رقم ' + data.id + '\n\nالاسم: ' + co.name.trim() + '\nالموبايل: ' + co.phone.trim() + '\nالمحافظة: ' + co.gov + '\nالعنوان: ' + co.addr.trim() +
-      '\n\nالطلب:\n' + items + '\n\nالمجموع الفرعي: ' + fmt(data.subtotal) + ' ج.م\nالشحن: ' + (Number(data.shipping) === 0 ? 'مجاني' : fmt(data.shipping) + ' ج.م') + '\nالإجمالي: ' + fmt(data.total) + ' ج.م\nالدفع عند الاستلام' + (co.note.trim() ? '\n\nملاحظات: ' + co.note.trim() : '');
+      '\n\nالطلب:\n' + items + '\n\nالمجموع الفرعي: ' + fmt(data.subtotal) + ' ج.م\nالشحن (' + S.carrier + '): ' + (Number(data.shipping) === 0 ? 'مجاني' : fmt(data.shipping) + ' ج.م') + '\nالإجمالي: ' + fmt(data.total) + ' ج.م\nالدفع عند الاستلام' + (co.note.trim() ? '\n\nملاحظات: ' + co.note.trim() : '');
     sentText = { id: data.id, msg }; cart = {}; saveCart(); step = 'sent'; await loadProducts(); renderGrid(); renderChips(); renderDrawer();
   }
 
@@ -273,7 +281,7 @@
     const t = e.target;
     if (t.id === 'sort') { F.sort = t.value; renderGrid(); }
     else if (t.id === 'genre') { F.genre = t.value; renderGrid(); }
-    else if (t.dataset.co != null) co[t.dataset.co] = t.value;
+    else if (t.dataset.co != null) { co[t.dataset.co] = t.value; if (t.dataset.co === 'gov') { ls.set('mh-co', co); renderDrawer(); } }
     else if (t.dataset.rq != null) rq[t.dataset.rq] = t.value;
   });
   document.addEventListener('submit', e => { if (e.target.id === 'rqform') { e.preventDefault(); rqSubmit(); } });
@@ -282,10 +290,12 @@
   /* ---------- التشغيل ---------- */
   (async function boot() {
     if (!sb) { app.innerHTML = MH.notConfigured(); return; }
-    const [pr, st] = await Promise.all([
+    const [pr, st, rt] = await Promise.all([
       sb.from('products').select('*').eq('active', true).order('created_at', { ascending: false }),
-      sb.from('settings').select('*').eq('id', 1).maybeSingle()
+      sb.from('settings').select('*').eq('id', 1).maybeSingle(),
+      sb.from('shipping_rates').select('*').order('sort')
     ]);
+    if (!rt.error) (rt.data || []).forEach(r => { R[r.gov] = { gov: r.gov, fee: Number(r.fee), active: r.active !== false, sort: r.sort | 0 }; });
     if (!pr.error) P = (pr.data || []).map(mapProduct);
     S = mapSettings(st.data);
     render();

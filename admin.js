@@ -4,7 +4,7 @@
   const { sb, $, esc, fmt, EGP, PAL, GENRES, LANGS, ORDER_ST, REQ_ST, stLabel, mapProduct, coverStyle, coverInner, toast, imgUrl } = MH;
   const app = $('#app'), ov = $('#overlay');
   let tab = 'overview', pq = '', ost = 'all', sheet = null, loading = false, loadErr = '';
-  let products = [], orders = [], reqs = [], settings = {};
+  let products = [], orders = [], reqs = [], settings = {}, rates = [];
   const armed = {};
   function armDel(key, fn) {
     if (armed[key]) { clearTimeout(armed[key]); delete armed[key]; fn(); return; }
@@ -32,21 +32,22 @@
   }
   async function loadAll() {
     loading = true; loadErr = '';
-    const [p, o, r, s] = await Promise.all([
+    const [p, o, r, s, rt] = await Promise.all([
       sb.from('products').select('*').order('created_at', { ascending: false }),
       sb.from('orders').select('*').order('created_at', { ascending: false }).limit(500),
       sb.from('requests').select('*').order('created_at', { ascending: false }).limit(500),
-      sb.from('settings').select('*').eq('id', 1).maybeSingle()
+      sb.from('settings').select('*').eq('id', 1).maybeSingle(),
+      sb.from('shipping_rates').select('*').order('sort')
     ]);
-    if (p.error || o.error || r.error || s.error) loadErr = 'تعذر تحميل بعض البيانات. تأكد إنك شغّلت supabase.sql بالكامل.';
+    if (p.error || o.error || r.error || s.error || rt.error) loadErr = 'تعذر تحميل بعض البيانات. تأكد إنك شغّلت supabase.sql بالكامل.';
     products = (p.data || []).map(mapProduct); orders = o.data || []; reqs = r.data || [];
-    settings = MH.mapSettings(s.data); loading = false;
+    settings = MH.mapSettings(s.data); rates = (rt.data || []).map(x => ({ gov: x.gov, fee: Number(x.fee), active: x.active !== false, confirmed: !!x.confirmed })); loading = false;
   }
 
   /* ---------- الواجهة ---------- */
   function renderDash() {
-    const tabs = [['overview', 'نظرة عامة'], ['products', 'المنتجات'], ['orders', 'الطلبات'], ['requests', 'الطلبات الخاصة'], ['settings', 'الإعدادات']];
-    const inner = tab === 'overview' ? dOverview() : tab === 'products' ? dProducts() : tab === 'orders' ? dOrders() : tab === 'requests' ? dReqs() : dSettings();
+    const tabs = [['overview', 'نظرة عامة'], ['products', 'المنتجات'], ['orders', 'الطلبات'], ['requests', 'الطلبات الخاصة'], ['shipping', 'الشحن'], ['settings', 'الإعدادات']];
+    const inner = tab === 'overview' ? dOverview() : tab === 'products' ? dProducts() : tab === 'orders' ? dOrders() : tab === 'requests' ? dReqs() : tab === 'shipping' ? dShipping() : dSettings();
     app.innerHTML = '<div class="wrap dash"><div class="dtop"><h1>لوحة تحكم مانجا هب</h1><span style="display:flex;gap:.5rem;flex-wrap:wrap"><button class="btn sm" type="button" data-act="reload">تحديث</button><a class="btn sm" href="index.html">عرض المتجر</a><button class="btn sm ghost" type="button" data-act="logout">خروج</button></span></div>' +
       (loadErr ? '<div class="notice">' + esc(loadErr) + '</div>' : '') +
       '<div class="tabs" role="tablist">' + tabs.map(t => '<button type="button" role="tab" data-act="tab" data-v="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + (t[0] === 'orders' && orders.some(o => o.status === 'new') ? ' <span class="pill info">' + orders.filter(o => o.status === 'new').length + '</span>' : '') + '</button>').join('') + '</div>' + inner + '</div>';
@@ -98,13 +99,23 @@
         '<div class="bot"><label class="f" style="grid-auto-flow:column;align-items:center;gap:.5rem">السعر المتفق عليه<input type="number" min="0" style="width:110px" data-rprice="' + r.id + '" value="' + esc(r.price || '') + '"></label><span style="display:flex;gap:.5rem;align-items:center"><select data-rst="' + r.id + '" aria-label="الحالة">' + REQ_ST.map(s => '<option value="' + s[0] + '"' + (r.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>').join('') + '</select><button type="button" class="btn sm danger" data-act="r-del" data-id="' + r.id + '">' + (armed['r' + r.id] ? 'تأكيد الحذف' : 'حذف') + '</button></span></div></div>';
     }).join('') + '</div>' : '<div class="empty" style="grid-column:auto">مفيش طلبات خاصة.</div>');
   }
+  function dShipping() {
+    const unc = rates.filter(r => r.active && !r.confirmed).length;
+    const car = esc(settings.carrier || 'بارسيل');
+    return (unc ? '<div class="notice"><span>' + unc + ' محافظة لسه بسعر افتراضي. حط أسعار ' + car + ' الفعلية لكل محافظة.</span></div>' : '') +
+      '<div class="tools"><input type="number" id="bulkfee" min="0" inputmode="numeric" placeholder="سعر موحد لكل المحافظات"><button type="button" class="btn" data-act="rates-bulk">تطبيق على الكل</button></div>' +
+      (rates.length ? '<div class="rows">' + rates.map(r => '<div class="row" style="grid-template-columns:minmax(0,1fr) 110px auto"><div><h4>' + esc(r.gov) + '</h4><div class="meta"><span class="pill ' + (r.confirmed ? 'ok' : 'warn') + '">' + (r.confirmed ? 'محدد' : 'افتراضي') + '</span></div></div>' +
+        '<input type="number" min="0" inputmode="numeric" data-rfee="' + esc(r.gov) + '" value="' + esc(r.fee) + '" aria-label="سعر الشحن إلى ' + esc(r.gov) + '"><label class="check"><input type="checkbox" data-ract="' + esc(r.gov) + '"' + (r.active ? ' checked' : '') + '>متاحة</label></div>').join('') + '</div>'
+        : '<div class="empty" style="grid-column:auto">جدول الشحن فاضي. شغّل ملف shipping.sql في Supabase.</div>') +
+      '<p class="hint" style="margin-top:1rem">السعر بيتحسب على السيرفر وقت الطلب حسب محافظة الزبون. الشحن المجاني من حد معين بيتظبط من الإعدادات.</p>';
+  }
   let sd = null;
   function dSettings() {
     sd = sd || Object.assign({}, settings); const s = sd;
     const f = (k, l, n, ex) => '<label class="f">' + l + '<input id="s-' + k + '" data-s="' + k + '" ' + (n ? 'type="number" min="0" inputmode="numeric" data-num="1"' : 'type="text"') + ' value="' + esc(s[k] == null ? '' : s[k]) + '" ' + (ex || '') + '></label>';
     return '<div class="panel" style="max-width:720px">' + f('heroTitle', 'عنوان الصفحة الرئيسي') + f('heroSub', 'الوصف تحت العنوان') + f('announcement', 'شريط الإعلان العلوي (سيبه فاضي لو مش عايزه)') +
-      '<div class="grid2">' + f('whatsapp', 'رقم واتساب الطلبات', 0, 'dir="ltr" inputmode="tel"') + f('site', 'عنوان الموقع', 0, 'dir="ltr"') + '</div>' +
-      '<div class="grid2">' + f('shipFee', 'سعر الشحن (ج.م)', 1) + f('freeOver', 'شحن مجاني للطلبات من (ج.م، 0 لإلغائه)', 1) + '</div>' +
+      '<div class="grid2">' + f('whatsapp', 'رقم واتساب الطلبات', 0, 'dir="ltr" inputmode="tel"') + f('site', 'عنوان الموقع', 0, 'dir="ltr"') + '</div>' + f('carrier', 'شركة الشحن') +
+      '<div class="grid2">' + f('shipFee', 'سعر الشحن الافتراضي (ج.م)', 1) + f('freeOver', 'شحن مجاني للطلبات من (ج.م، 0 لإلغائه)', 1) + '</div>' +
       '<div><button type="button" class="btn primary" data-act="s-save">حفظ الإعدادات</button></div></div>';
   }
 
@@ -153,8 +164,14 @@
     else if (a === 'p-save') saveProduct();
     else if (a === 'o-del') armDel('o' + id, async () => { const r = await sb.from('orders').delete().eq('id', id); if (r.error) toast('تعذر الحذف'); else { await loadAll(); renderDash(); } });
     else if (a === 'r-del') armDel('r' + id, async () => { const r = await sb.from('requests').delete().eq('id', id); if (r.error) toast('تعذر الحذف'); else { await loadAll(); renderDash(); } });
+    else if (a === 'rates-bulk') {
+      const v = Number($('#bulkfee').value);
+      if (!(v >= 0) || $('#bulkfee').value === '') { toast('اكتب السعر الأول'); return; }
+      const r = await sb.from('shipping_rates').update({ fee: v, confirmed: true }).neq('gov', '');
+      if (r.error) toast('تعذر التطبيق'); else { await loadAll(); renderDash(); toast('تم تطبيق السعر على كل المحافظات'); }
+    }
     else if (a === 's-save') {
-      const s = sd; const row = { id: 1, announcement: s.announcement || '', whatsapp: s.whatsapp || '', site: s.site || '', ship_fee: Number(s.shipFee) || 0, free_over: Number(s.freeOver) || 0, hero_title: s.heroTitle || '', hero_sub: s.heroSub || '' };
+      const s = sd; const row = { id: 1, announcement: s.announcement || '', whatsapp: s.whatsapp || '', site: s.site || '', carrier: s.carrier || 'بارسيل', ship_fee: Number(s.shipFee) || 0, free_over: Number(s.freeOver) || 0, hero_title: s.heroTitle || '', hero_sub: s.heroSub || '' };
       const r = await sb.from('settings').upsert(row);
       if (r.error) toast('تعذر حفظ الإعدادات'); else { settings = Object.assign({}, s); toast('تم حفظ الإعدادات'); }
     }
@@ -173,6 +190,21 @@
       if (r.error) toast('تعذر تحديث الحالة'); else { await loadAll(); renderDash(); }
     }
     else if (t.dataset.rst) { const r = await sb.from('requests').update({ status: t.value }).eq('id', t.dataset.rst); if (r.error) toast('تعذر تحديث الحالة'); else { const x = reqs.find(q => String(q.id) === t.dataset.rst); if (x) x.status = t.value; renderDash(); } }
+    else if (t.dataset.rfee) {
+      const g = t.dataset.rfee, v = Math.max(0, Number(t.value) || 0);
+      const r = await sb.from('shipping_rates').update({ fee: v, confirmed: true }).eq('gov', g);
+      if (r.error) { toast('تعذر حفظ السعر'); return; }
+      const x = rates.find(q => q.gov === g); if (x) { x.fee = v; x.confirmed = true; }
+      const pill = t.closest('.row') && t.closest('.row').querySelector('.pill'); if (pill) { pill.className = 'pill ok'; pill.textContent = 'محدد'; }
+      t.value = v; toast('تم حفظ سعر ' + g);
+    }
+    else if (t.dataset.ract) {
+      const g = t.dataset.ract;
+      const r = await sb.from('shipping_rates').update({ active: t.checked }).eq('gov', g);
+      if (r.error) { toast('تعذر الحفظ'); t.checked = !t.checked; return; }
+      const x = rates.find(q => q.gov === g); if (x) x.active = t.checked;
+      toast(t.checked ? 'تم تفعيل ' + g : 'تم إيقاف الشحن إلى ' + g);
+    }
     else if (t.dataset.rprice) { const r = await sb.from('requests').update({ price: Number(t.value) || 0 }).eq('id', t.dataset.rprice); toast(r.error ? 'تعذر حفظ السعر' : 'تم حفظ السعر'); }
     else if (t.dataset.f && sheet && (t.tagName === 'SELECT' || t.type === 'checkbox')) sheet.obj[t.dataset.f] = t.type === 'checkbox' ? t.checked : t.value;
     else if (t.id === 'coverfile' && t.files && t.files[0] && sheet) {
