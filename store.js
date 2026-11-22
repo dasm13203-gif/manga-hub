@@ -5,7 +5,7 @@
   const app = $('#app'), ov = $('#overlay');
   const LOGO = 'logo.jpg';
   let S = mapSettings(null), P = [];
-  const F = { q: '', lang: 'all', genre: 'all', sort: 'new' };
+  const F = { q: '', lang: 'all', genre: 'all', sort: 'feat' };
   let cart = ls.get('mh-cart', {});
   let co = ls.get('mh-co', { name: '', phone: '', gov: '', addr: '', note: '' });
   let drawer = false, step = 'edit', sentText = '', cerr = '', sending = false;
@@ -23,7 +23,13 @@
     const ship = sub === 0 ? 0 : (free ? 0 : fee);
     return { L, sub, ship, free, total: sub + ship, count: L.reduce((a, l) => a + l.q, 0) };
   }
-  function saveCart() { ls.set('mh-cart', cart); const b = $('#cbadge'); if (b) b.textContent = totals().count; }
+  function saveCart() {
+    ls.set('mh-cart', cart);
+    const T = totals();
+    const b = $('#cbadge'); if (b) b.textContent = T.count;
+    const bar = $('#cartbar'); if (bar) { bar.hidden = !T.count; $('#cbcount').textContent = T.count; $('#cbtotal').textContent = EGP(T.sub); }
+    document.body.classList.toggle('hascart', T.count > 0);
+  }
   function addToCart(id) {
     const p = prod(id); if (!p) return;
     const cur = cart[id] || 0;
@@ -32,7 +38,7 @@
   }
 
   /* ---------- الصفحة ---------- */
-  const feat = (i, t, s) => '<div class="feat">' + i + '<div><b>' + t + '</b><span>' + s + '</span></div></div>';
+  const trust = (i, t) => '<li>' + i + '<span>' + t + '</span></li>';
   function render() {
     const words = String(S.heroTitle || '').trim().split(/\s+/); const last = words.pop() || '';
     const h1 = esc(words.join(' ')) + (words.length ? ' ' : '') + '<em>' + esc(last) + '</em>';
@@ -40,45 +46,45 @@
       (S.announcement ? '<div class="ann"><div class="wrap">' + esc(S.announcement) + '</div></div>' : '') +
       '<header class="hdr"><div class="wrap">' +
       '<a class="brand" href="#top"><img src="' + LOGO + '" alt=""><b>مانجا <i>هب</i></b></a>' +
-      '<nav class="nav"><a href="#catalog">المجلدات</a><a href="#request">طلب خاص</a><a href="#contact">تواصل</a></nav><span class="sp"></span>' +
+      '<nav class="nav"><a href="#catalog">المجلدات</a><a href="#request">طلب خاص</a><a href="#faq">أسئلة</a><a href="#contact">تواصل</a></nav><span class="sp"></span>' +
       '<button class="btn cartbtn" data-act="cart" type="button">' + IC.cart + '<span>السلة</span><span class="badge num" id="cbadge">0</span></button>' +
       '</div></header>' +
-      '<section class="hero" id="top"><div class="wrap"><div>' +
-      '<div class="eyebrow">MANGA HUB · مانجا هب</div><h1>' + h1 + '</h1>' +
+      '<section class="hero" id="top"><div class="wrap heroin"><div class="herotxt">' +
+      '<div class="eyebrow">MANGA HUB</div><h1>' + h1 + '</h1>' +
       '<p class="lead">' + esc(S.heroSub || '') + '</p>' +
-      '<div class="cta"><a class="btn primary" href="#catalog">تصفح المجلدات</a><a class="btn" href="#request">اطلب أي مانجا</a></div>' +
-      '<div class="langs"><span>عربي</span><span>ENGLISH</span><span>FRANÇAIS</span></div>' +
-      '</div><div class="emblem"><img src="' + LOGO + '" alt="شعار مانجا هب"><div class="jp" aria-hidden="true">漫画</div><div class="jp2" aria-hidden="true">オタク</div></div></div></section>' +
-      '<section class="feats"><div class="wrap">' +
-      feat(IC.truck, 'شحن سريع', 'جميع المحافظات') + feat(IC.shield, 'تغليف آمن', 'حماية كاملة') + feat(IC.badge, 'منتجات أصلية', '100% جودة') + feat(IC.bag, 'طلبات خاصة', 'متاح بالطلب') +
-      '</div></section>' +
-      '<section class="sec" id="catalog"><div class="wrap"><div class="sec-head"><h2>المجلدات</h2><span class="muted" id="rescount"></span></div></div>' +
-      '<div class="filters"><div class="wrap">' +
-      '<div class="frow top"><input type="search" id="q" placeholder="ابحث باسم المانجا أو المؤلف" aria-label="بحث" value="' + esc(F.q) + '"><select id="sort" aria-label="الترتيب"><option value="new">الأحدث</option><option value="pa">السعر: الأقل أولاً</option><option value="pd">السعر: الأعلى أولاً</option></select></div>' +
-      '<div class="frow" id="langchips"></div><div class="frow" id="genrechips"></div>' +
-      '</div></div><div class="wrap"><div class="products" id="grid"></div></div></section>' +
+      '<div class="cta"><a class="btn primary" href="#catalog">تصفح المجلدات</a><a class="btn ghost" href="#request">اطلب أي مانجا</a></div>' +
+      '</div><div class="emblem"><img src="' + LOGO + '" alt="شعار مانجا هب"></div></div></section>' +
+      '<div class="wrap"><ul class="trust">' + trust(IC.truck, 'شحن لجميع المحافظات') + trust(IC.shield, 'تغليف آمن') + trust(IC.badge, 'منتجات أصلية 100%') + trust(IC.bag, 'اطلب أي مانجا بالطلب') + '</ul></div>' +
+      '<section class="sec catalog" id="catalog"><div class="wrap">' +
+      '<div class="sec-head"><h2>المجلدات</h2><span class="muted" id="rescount"></span></div>' +
+      '<div class="toolbar"><input type="search" id="q" placeholder="ابحث باسم المانجا أو المؤلف" aria-label="بحث" value="' + esc(F.q) + '">' +
+      '<div class="chips" id="langchips"></div><select id="genre" aria-label="النوع"></select>' +
+      '<select id="sort" aria-label="الترتيب"><option value="feat">الأبرز</option><option value="new">الأحدث</option><option value="pa">السعر: الأقل أولاً</option><option value="pd">السعر: الأعلى أولاً</option></select></div>' +
+      '<div class="products" id="grid"></div></div></section>' +
       '<section class="sec req" id="request"><div class="wrap box"><div>' +
       '<div class="eyebrow">SPECIAL ORDER</div><h2>اطلب أي مانجا</h2>' +
-      '<p class="muted" style="margin-top:.8rem">مش لاقي العنوان اللي بتدور عليه؟ ابعتلنا اسمه ونرد عليك بالسعر وموعد التوفير.</p>' +
-      '<ul><li>أي عنوان وأي مجلد، بالعربي أو الإنجليزي أو الفرنسي</li><li>بنأكد معاك السعر قبل ما نبدأ</li><li>التواصل كله على واتساب</li></ul>' +
+      '<p class="muted" style="margin-top:.8rem;max-width:30rem">مش لاقي العنوان اللي بتدور عليه؟ ابعتلنا اسمه ونرد عليك بالسعر وموعد التوفير، بالعربي أو الإنجليزي أو الفرنسي.</p>' +
       '</div><form class="panel" id="rqform" novalidate>' + rqFormHTML() + '</form></div></section>' +
-      '<footer class="foot" id="contact"><div class="wrap"><div class="copy"><b>مانجا هب</b><span>· وجهتك لعالم المانجا</span></div>' +
-      '<div class="copy"><span>واتساب:</span><a class="num" dir="ltr" href="' + esc(waLink(S, 'أهلاً مانجا هب')) + '" target="_blank" rel="noopener">' + esc(S.whatsapp || '') + '</a><span>·</span><span class="num" dir="ltr">' + esc(S.site || '') + '</span></div></div></footer>';
+      faqHTML() + footerHTML() +
+      '<a class="fab" href="' + esc(waLink(S, 'أهلاً مانجا هب')) + '" target="_blank" rel="noopener" aria-label="تواصل على واتساب">' + IC.wa + '</a>' +
+      '<div class="cartbar" id="cartbar" hidden><button type="button" data-act="cart"><span>' + IC.cart + ' <b id="cbcount">0</b> مجلد في السلة</span><span class="num" id="cbtotal"></span></button></div>';
     renderChips(); renderGrid(); saveCart();
     const so = $('#sort'); if (so) so.value = F.sort;
   }
   function renderChips() {
-    const lc = $('#langchips'), gc = $('#genrechips'); if (!lc) return;
-    const langs = [['all', 'كل اللغات']].concat(Object.keys(LANGS).filter(k => P.some(p => p.lang === k)).map(k => [k, LANGS[k]]));
+    const lc = $('#langchips'), gs = $('#genre'); if (!lc) return;
+    const langs = [['all', 'الكل']].concat(Object.keys(LANGS).filter(k => P.some(p => p.lang === k)).map(k => [k, LANGS[k]]));
     lc.innerHTML = langs.map(l => '<button type="button" class="chip" data-act="lang" data-v="' + l[0] + '" aria-pressed="' + (F.lang === l[0]) + '">' + l[1] + '</button>').join('');
-    const gs = [...new Set(P.map(p => p.genre).filter(Boolean))];
-    gc.innerHTML = ['all'].concat(gs).map(g => '<button type="button" class="chip" data-act="genre" data-v="' + esc(g) + '" aria-pressed="' + (F.genre === g) + '">' + (g === 'all' ? 'كل الأنواع' : esc(g)) + '</button>').join('');
+    const genres = [...new Set(P.map(p => p.genre).filter(Boolean))];
+    gs.innerHTML = '<option value="all">كل الأنواع</option>' + genres.map(g => '<option value="' + esc(g) + '">' + esc(g) + '</option>').join('');
+    gs.value = genres.includes(F.genre) ? F.genre : 'all';
   }
   function renderGrid() {
     const g = $('#grid'); if (!g) return;
     let L = P.filter(p => (F.lang === 'all' || p.lang === F.lang) && (F.genre === 'all' || p.genre === F.genre));
     const q = F.q.trim().toLowerCase();
     if (q) L = L.filter(p => (p.title + ' ' + (p.author || '')).toLowerCase().includes(q));
+    if (F.sort === 'feat') L = L.slice().sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
     if (F.sort === 'pa') L = L.slice().sort((a, b) => a.price - b.price);
     if (F.sort === 'pd') L = L.slice().sort((a, b) => b.price - a.price);
     const rc = $('#rescount'); if (rc) rc.textContent = L.length + ' مجلد';
@@ -89,8 +95,8 @@
     const tags = (p.preorder ? '<span class="tag">متاح بالطلب</span>' : '') + (out ? '<span class="tag out">نفد</span>' : '') +
       (p.oldPrice > p.price ? '<span class="tag sale">خصم ' + Math.round((1 - p.price / p.oldPrice) * 100) + '%</span>' : '') +
       (!out && !p.preorder && p.stock > 0 && p.stock <= 3 ? '<span class="tag">آخر ' + p.stock + '</span>' : '');
-    return '<article class="card"><div class="cover" style="' + coverStyle(p) + '">' + coverInner(p) + '<div class="tags">' + tags + '</div></div>' +
-      '<div class="cinfo"><h3>' + esc(p.title) + (p.vol ? ' <span class="muted num" style="font-weight:600">#' + esc(p.vol) + '</span>' : '') + '</h3>' +
+    return '<article class="card"><div class="cover" data-act="view" data-id="' + esc(p.id) + '" style="' + coverStyle(p) + '">' + coverInner(p) + '<div class="tags">' + tags + '</div><button type="button" class="qv" data-act="view" data-id="' + esc(p.id) + '">عرض سريع</button></div>' +
+      '<div class="cinfo"><h3 data-act="view" data-id="' + esc(p.id) + '">' + esc(p.title) + (p.vol ? ' <span class="muted num" style="font-weight:600">#' + esc(p.vol) + '</span>' : '') + '</h3>' +
       '<div class="au">' + esc(p.author || '') + (p.lang ? ' · ' + LANGS[p.lang] : '') + '</div><div></div>' +
       '<div><div class="price"><b>' + EGP(p.price) + '</b>' + (p.oldPrice > p.price ? '<s>' + fmt(p.oldPrice) + '</s>' : '') + '</div>' +
       '<button type="button" class="btn primary" data-act="add" data-id="' + esc(p.id) + '"' + (out ? ' disabled' : '') + '>' + (out ? 'غير متوفر' : (p.preorder ? 'اطلبه الآن' : 'أضف للسلة')) + '</button></div></div></article>';
@@ -101,7 +107,7 @@
     if (rqSent) return '<div class="sent"><div class="ok">' + IC.check + '</div><h3>وصلنا طلبك</h3><p class="muted">هنرد عليك بالسعر وموعد التوفير. تقدر تسرّع الرد بإرسال نفس الطلب على واتساب.</p>' +
       '<a class="btn primary" href="' + esc(waLink(S, rqSent)) + '" target="_blank" rel="noopener">إرسال على واتساب</a>' +
       '<button type="button" class="btn ghost" data-act="rqnew">طلب عنوان آخر</button></div>';
-    return '<label class="f">اسم المانجا<input id="rq-title" data-rq="title" value="' + esc(rq.title) + '" placeholder="مثال: Vinland Saga" maxlength="150"></label>' +
+    return '<label class="f">اسم المانجا<input id="rq-title" data-rq="title" value="' + esc(rq.title) + '" placeholder="Vinland Saga" maxlength="150"></label>' +
       '<div class="grid2"><label class="f">اللغة<select id="rq-lang" data-rq="lang">' + Object.keys(LANGS).map(k => '<option value="' + k + '"' + (rq.lang === k ? ' selected' : '') + '>' + LANGS[k] + '</option>').join('') + '</select></label>' +
       '<label class="f">رقم المجلد أو ملاحظات<input id="rq-notes" data-rq="notes" value="' + esc(rq.notes) + '" placeholder="المجلد 1 إلى 5" maxlength="300"></label></div>' +
       '<div class="grid2"><label class="f">اسمك<input id="rq-name" data-rq="name" value="' + esc(rq.name) + '" autocomplete="name" maxlength="100"></label>' +
@@ -121,6 +127,57 @@
     rqBusy = false;
     rqSent = 'طلب مانجا خاص\nالعنوان: ' + rq.title.trim() + '\nاللغة: ' + LANGS[rq.lang] + (rq.notes.trim() ? '\nالمجلد/ملاحظات: ' + rq.notes.trim() : '') + '\nالاسم: ' + rq.name.trim() + '\nالموبايل: ' + rq.phone.trim();
     $('#rqform').innerHTML = rqFormHTML();
+  }
+
+
+  /* ---------- أقسام إضافية ---------- */
+  function hotHTML() {
+    const L = P.filter(p => p.featured);
+    if (!L.length) return '';
+    return '<section class="sec hot" id="hot"><div class="wrap"><div class="sec-head"><div><div class="eyebrow">TOP PICKS</div><h2>الأكثر طلبًا</h2></div></div></div>' +
+      '<div class="wrap"><div class="hotrow">' + L.map(card).join('') + '</div></div></section>';
+  }
+  function stepsHTML() {
+    const st = [['اختار مجلداتك', 'تصفح الكتالوج وضيف اللي عجبك للسلة.'], ['أكّد الطلب', 'اكتب بياناتك وعنوانك، والطلب بيتسجل عندنا فورًا.'], ['نأكد على واتساب', 'بنكلمك نأكد الشحن، وبتدفع عند الاستلام.']];
+    return '<section class="sec steps" id="how"><div class="wrap"><div class="sec-head"><div><div class="eyebrow">HOW IT WORKS</div><h2>إزاي تطلب</h2></div></div>' +
+      '<ol class="stepgrid">' + st.map((x, i) => '<li><span class="sn num">' + (i + 1) + '</span><div><b>' + x[0] + '</b><p class="muted">' + x[1] + '</p></div></li>').join('') + '</ol></div></section>';
+  }
+  function faqHTML() {
+    const fee = Number(S.shipFee) || 0, fo = Number(S.freeOver) || 0;
+    const q = [
+      ['بتشحنوا لأنهي محافظات؟', 'بنشحن لجميع محافظات مصر. سعر الشحن ' + EGP(fee) + (fo > 0 ? ' والشحن مجاني للطلبات من ' + EGP(fo) + '.' : '.')],
+      ['الدفع إزاي؟', 'الدفع عند الاستلام.'],
+      ['المنتجات أصلية؟', 'أيوه، كل منتجاتنا أصلية 100% جودة وبتتغلّف بحماية كاملة قبل الشحن.'],
+      ['مش لاقي العنوان اللي بدور عليه؟', 'اطلبه من قسم «اطلب أي مانجا». بنرد عليك بالسعر وموعد التوفير قبل ما نبدأ.']
+    ];
+    return '<section class="sec faq" id="faq"><div class="wrap narrow"><div class="sec-head"><div><div class="eyebrow">FAQ</div><h2>أسئلة شائعة</h2></div></div>' +
+      q.map(x => '<details><summary>' + esc(x[0]) + '</summary><p class="muted">' + esc(x[1]) + '</p></details>').join('') + '</div></section>';
+  }
+  function footerHTML() {
+    return '<footer class="foot" id="contact"><div class="wrap fmin">' +
+      '<a class="brand" href="#top"><img src="' + LOGO + '" alt=""><b>مانجا <i>هب</i></b></a>' +
+      '<nav class="flinks inline"><a href="#catalog">المجلدات</a><a href="#request">طلب خاص</a><a href="#faq">أسئلة شائعة</a></nav>' +
+      '<a class="btn sm" href="' + esc(waLink(S, 'أهلاً مانجا هب')) + '" target="_blank" rel="noopener">' + IC.wa + 'واتساب</a></div>' +
+      '<div class="wrap fbottom"><span>© ' + new Date().getFullYear() + ' مانجا هب · وجهتك لعالم المانجا</span><span class="num" dir="ltr">' + esc(S.whatsapp || '') + (S.site ? ' · ' + esc(S.site) : '') + '</span></div></footer>';
+  }
+
+  /* ---------- عرض سريع للمنتج ---------- */
+  let qv = null;
+  const mo = document.createElement('div'); mo.id = 'modal'; document.body.appendChild(mo);
+  function renderModal() {
+    if (!qv) { mo.innerHTML = ''; return; }
+    const p = prod(qv.id); if (!p) { qv = null; mo.innerHTML = ''; return; }
+    const out = !p.preorder && (p.stock | 0) <= 0, max = maxQty(p);
+    const stock = p.preorder ? '<span class="pill info">متاح بالطلب</span>' : (out ? '<span class="pill bad">نفد</span>' : (p.stock <= 3 ? '<span class="pill warn">آخر ' + p.stock + ' نسخ</span>' : '<span class="pill ok">متوفر</span>'));
+    mo.innerHTML = '<div class="scrim on" data-act="vclose"></div><div class="qmodal" role="dialog" aria-modal="true" aria-label="' + esc(p.title) + '">' +
+      '<button type="button" class="btn sm ghost qx" data-act="vclose" aria-label="إغلاق">إغلاق</button>' +
+      '<div class="qcover cover" style="' + coverStyle(p) + '">' + coverInner(p) + '</div>' +
+      '<div class="qinfo"><div class="eyebrow">' + esc(LANGS[p.lang] || '') + (p.genre ? ' · ' + esc(p.genre) : '') + '</div>' +
+      '<h2>' + esc(p.title) + '</h2><p class="muted">' + esc(p.author || '') + (p.vol ? ' · المجلد ' + esc(p.vol) : '') + '</p>' +
+      '<div class="price big"><b>' + EGP(p.price) + '</b>' + (p.oldPrice > p.price ? '<s>' + fmt(p.oldPrice) + '</s>' : '') + '</div>' + '<div>' + stock + '</div>' +
+      '<div class="qrow"><div class="qty"><button type="button" data-act="vq-" aria-label="إنقاص">−</button><span>' + qv.q + '</span><button type="button" data-act="vq+" aria-label="زيادة">+</button></div>' +
+      '<button type="button" class="btn primary" data-act="vadd"' + (out ? ' disabled' : '') + '>' + (out ? 'غير متوفر' : 'أضف للسلة') + '</button></div>' +
+      '<a class="btn ghost" href="' + esc(waLink(S, 'أهلاً مانجا هب، عايز أسأل عن: ' + p.title + (p.vol ? ' المجلد ' + p.vol : ''))) + '" target="_blank" rel="noopener">' + IC.wa + 'اسأل عن المجلد على واتساب</a></div></div>';
   }
 
   /* ---------- السلة ---------- */
@@ -196,6 +253,11 @@
     else if (a === 'inc') { const p = prod(id); if (p && (cart[id] || 0) < maxQty(p)) { cart[id] = (cart[id] || 0) + 1; saveCart(); renderDrawer(); } else toast('وصلت للكمية المتاحة'); }
     else if (a === 'dec') { cart[id] = Math.max(0, (cart[id] || 0) - 1); if (!cart[id]) delete cart[id]; saveCart(); renderDrawer(); }
     else if (a === 'rm') { delete cart[id]; saveCart(); renderDrawer(); }
+    else if (a === 'view') { qv = { id, q: 1 }; renderModal(); }
+    else if (a === 'vclose') { qv = null; renderModal(); }
+    else if (a === 'vq+') { const p = prod(qv.id); if (p && qv.q < Math.min(maxQty(p) || 1, 20)) qv.q++; renderModal(); }
+    else if (a === 'vq-') { if (qv.q > 1) qv.q--; renderModal(); }
+    else if (a === 'vadd') { const p = prod(qv.id); if (p) { const cur = cart[p.id] || 0; cart[p.id] = Math.min(cur + qv.q, maxQty(p)); saveCart(); toast('تمت الإضافة للسلة'); qv = null; renderModal(); } }
     else if (a === 'checkout') checkout();
     else if (a === 'rqnew') { rqSent = ''; rq = { title: '', lang: 'ar', notes: '', name: rq.name, phone: rq.phone }; $('#rqform').innerHTML = rqFormHTML(); }
     else if (a === 'lang') { F.lang = v; renderChips(); renderGrid(); }
@@ -210,11 +272,12 @@
   document.addEventListener('change', e => {
     const t = e.target;
     if (t.id === 'sort') { F.sort = t.value; renderGrid(); }
+    else if (t.id === 'genre') { F.genre = t.value; renderGrid(); }
     else if (t.dataset.co != null) co[t.dataset.co] = t.value;
     else if (t.dataset.rq != null) rq[t.dataset.rq] = t.value;
   });
   document.addEventListener('submit', e => { if (e.target.id === 'rqform') { e.preventDefault(); rqSubmit(); } });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && drawer) { drawer = false; renderDrawer(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (qv) { qv = null; renderModal(); } else if (drawer) { drawer = false; renderDrawer(); } } });
 
   /* ---------- التشغيل ---------- */
   (async function boot() {
